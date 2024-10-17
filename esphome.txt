@@ -1,0 +1,66 @@
+esphome:
+  name: countdown_timer
+  platform: ESP8266
+  board: nodemcuv2  # Adjust to match your ESP board
+
+# Enable I2C for the LCD display
+i2c:
+  sda: D2
+  scl: D1
+  scan: true
+
+# Define the 1602 LCD display
+display:
+  - platform: lcd_pcf8574
+    id: my_display
+    dimensions: 16x2
+    address: 0x27  # Adjust based on your I2C address
+    update_interval: 1s
+    lambda: |-
+      it.printf(0, 0, "Timer: %02d", id(countdown).state);  # Display the countdown timer value
+
+# External switch connected to a GPIO pin
+binary_sensor:
+  - platform: gpio
+    pin: D5  # GPIO pin for the external switch
+    name: "Start Timer Button"
+    on_press:
+      then:
+        - script.execute: start_countdown
+
+# Text sensor to hold the countdown state
+text_sensor:
+  - platform: template
+    name: "Countdown Timer Status"
+    id: countdown_status
+
+# Number component to hold the countdown value
+number:
+  - platform: template
+    name: "Countdown Timer"
+    id: countdown
+    optimistic: true
+    min_value: 0
+    max_value: 30
+    step: 1
+
+# Script to handle the countdown logic
+script:
+  - id: start_countdown
+    mode: restart
+    then:
+      - number.set: 
+          id: countdown
+          value: 30
+      - while:
+          condition:
+            lambda: 'return id(countdown).state > 0;'
+          then:
+            - delay: 1s
+            - lambda: |-
+                id(countdown).set_state(id(countdown).state - 1);
+      - text_sensor.template.publish:
+          id: countdown_status
+          state: "Countdown Complete!"
+      - lambda: |-
+          id(countdown).set_state(0);  # Reset countdown to 0
